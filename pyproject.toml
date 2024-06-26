@@ -36,5 +36,5 @@ dependencies = [
   "pandas",
 ]
 
-[tool.setuptools]
-packages = ["esm"]
+[tool.setuptools.packages.find]
+where = ["esm"]
