@@ -108,7 +108,7 @@ class EncodeInputs(nn.Module):
     ) -> torch.Tensor:
         sequence_embed = self.sequence_embed(sequence_tokens)
 
-        rbf_16_fn = partial(rbf, v_min=0.0, v_max=1.0, n_bins=16)
+        rbf_16_fn = lambda x: partial(rbf, v_min=0.0, v_max=1.0, n_bins=16)(x).to(torch.bfloat16)
         # the `masked_fill(padding_mask.unsqueeze(2), 0)` for the two below is unnecessary
         # as pad tokens never even interact with the "real" tokens (due to sequence_id)
         plddt_embed = self.plddt_projection(rbf_16_fn(average_plddt))
