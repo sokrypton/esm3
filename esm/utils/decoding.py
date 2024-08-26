@@ -31,6 +31,7 @@ from esm.utils.function.encode_decode import (
     decode_function_tokens,
     decode_residue_annotation_tokens,
 )
+from esm.utils.misc import list_nan_to_none
 from esm.utils.structure.protein_chain import ProteinChain
 from esm.utils.types import FunctionAnnotation
 
@@ -53,7 +54,7 @@ def decode_protein_tensor(
     # If all pad tokens, set to None
     for track in attr.fields(ESMProteinTensor):
         tokens: torch.Tensor | None = getattr(input, track.name)
-        if track.name == "coordinates":
+        if track.name == "coordinates" or track.name == "potential_sequence_of_concern":
             continue
         if tokens is not None:
             tokens = tokens[1:-1]  # Remove BOS and EOS tokens
@@ -109,6 +110,7 @@ def decode_protein_tensor(
         coordinates=coordinates,
         plddt=plddt,
         ptm=ptm,
+        potential_sequence_of_concern=input.potential_sequence_of_concern,
     )
 
 
@@ -199,8 +201,20 @@ def decode_sasa(
     if sasa_tokens[-1] != 0:
         raise ValueError("SASA does not end with 0 corresponding to EOS token")
     sasa_tokens = sasa_tokens[1:-1]
-    sasa = sasa_tokens.tolist()
-    return sasa
+    if sasa_tokens.dtype in [
+        torch.int8,
+        torch.int16,
+        torch.int32,
+        torch.int64,
+        torch.long,
+    ]:
+        # Decode if int
+        sasa = sasa_tokenizer.decode_float(sasa_tokens)
+    else:
+        # If already float, just convert to list
+        sasa = sasa_tokens.tolist()
+
+    return list_nan_to_none(sasa)
 
 
 def decode_function_annotations(
