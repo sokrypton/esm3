@@ -105,8 +105,13 @@ class EncodeInputs(nn.Module):
         sasa_tokens: torch.Tensor,
         function_tokens: torch.Tensor,
         residue_annotation_tokens: torch.Tensor,
+        sequence_one_hot = None
+        
     ) -> torch.Tensor:
-        sequence_embed = self.sequence_embed(sequence_tokens)
+        if sequence_one_hot is None:
+            sequence_embed = self.sequence_embed(sequence_tokens)
+        else:
+            sequence_embed = sequence_one_hot @ self.sequence_embed.weight            
 
         rbf_16_fn = lambda x: partial(rbf, v_min=0.0, v_max=1.0, n_bins=16)(x).to(torch.bfloat16)
         # the `masked_fill(padding_mask.unsqueeze(2), 0)` for the two below is unnecessary
@@ -282,6 +287,7 @@ class ESM3(nn.Module, ESM3InferenceClient):
         structure_coords: torch.Tensor | None = None,
         chain_id: torch.Tensor | None = None,
         sequence_id: torch.Tensor | None = None,
+        sequence_one_hot = None
     ) -> ESMOutput:
         """
         Performs forward pass through the ESM3 model. Check utils to see how to tokenize inputs from raw data.
@@ -319,6 +325,7 @@ class ESM3(nn.Module, ESM3InferenceClient):
                     structure_coords,
                     function_tokens,
                     residue_annotation_tokens,
+                    sequence_one_hot,
                 ]
                 if x is not None
             )
@@ -378,6 +385,7 @@ class ESM3(nn.Module, ESM3InferenceClient):
             sasa_tokens,
             function_tokens,
             residue_annotation_tokens,
+            sequence_one_hot
         )
         x, embedding = self.transformer(x, sequence_id, affine, affine_mask, chain_id)
         return self.output_heads(x, embedding)
