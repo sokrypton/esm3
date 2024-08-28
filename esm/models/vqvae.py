@@ -382,32 +382,39 @@ class StructureTokenDecoder(nn.Module):
         structure_tokens: torch.Tensor,
         attention_mask: torch.Tensor | None = None,
         sequence_id: torch.Tensor | None = None,
+        structure_one_hot = None,
+        return_logits=False
     ):
+        if structure_one_hot is None:
+            # check that BOS and EOS are set correctly
+            assert (
+                structure_tokens[:, 0].eq(self.special_tokens["BOS"]).all()
+            ), "First token in structure_tokens must be BOS token"
+            assert (
+                structure_tokens[
+                    torch.arange(structure_tokens.shape[0]), attention_mask.sum(1) - 1
+                ]
+                .eq(self.special_tokens["EOS"])
+                .all()
+            ), "Last token in structure_tokens must be EOS token"
+            assert (
+                (structure_tokens < 0).sum() == 0
+            ), "All structure tokens set to -1 should be replaced with BOS, EOS, PAD, or MASK tokens by now, but that isn't the case!"
+            x = self.embed(structure_tokens)
+        else:
+            structure_tokens = structure_one_hot.argmax(-1)
+            x = structure_one_hot @ self.embed.weight
+            
+        if sequence_id is None:
+            sequence_id = torch.zeros_like(structure_tokens, dtype=torch.int64)
+
         if attention_mask is None:
             attention_mask = torch.ones_like(structure_tokens, dtype=torch.bool)
 
         attention_mask = attention_mask.bool()
-        if sequence_id is None:
-            sequence_id = torch.zeros_like(structure_tokens, dtype=torch.int64)
         # not supported for now
         chain_id = torch.zeros_like(structure_tokens, dtype=torch.int64)
 
-        # check that BOS and EOS are set correctly
-        assert (
-            structure_tokens[:, 0].eq(self.special_tokens["BOS"]).all()
-        ), "First token in structure_tokens must be BOS token"
-        assert (
-            structure_tokens[
-                torch.arange(structure_tokens.shape[0]), attention_mask.sum(1) - 1
-            ]
-            .eq(self.special_tokens["EOS"])
-            .all()
-        ), "Last token in structure_tokens must be EOS token"
-        assert (
-            (structure_tokens < 0).sum() == 0
-        ), "All structure tokens set to -1 should be replaced with BOS, EOS, PAD, or MASK tokens by now, but that isn't the case!"
-
-        x = self.embed(structure_tokens)
         # !!! NOTE: Attention mask is actually unused here so watch out
         x, _ = self.decoder_stack.forward(
             x, affine=None, affine_mask=None, sequence_id=sequence_id, chain_id=chain_id
@@ -442,11 +449,19 @@ class StructureTokenDecoder(nn.Module):
         plddt_value = CategoricalMixture(
             plddt_logits, bins=plddt_logits.shape[-1]
         ).mean()
-
-        return dict(
-            tensor7_affine=tensor7_affine,
-            bb_pred=bb_pred,
-            plddt=plddt_value,
-            ptm=ptm,
-            predicted_aligned_error=pae,
-        )
+        if return_logits:
+          return dict(
+              tensor7_affine=tensor7_affine,
+              bb_pred=bb_pred,
+              plddt_logits=plddt_logits,
+              pae_logits=pae_logits,
+          )
+        
+        else:
+          return dict(
+              tensor7_affine=tensor7_affine,
+              bb_pred=bb_pred,
+              plddt=plddt_value,
+              ptm=ptm,
+              predicted_aligned_error=pae,
+          )

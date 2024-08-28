@@ -106,7 +106,8 @@ class EncodeInputs(nn.Module):
         sasa_tokens: torch.Tensor,
         function_tokens: torch.Tensor,
         residue_annotation_tokens: torch.Tensor,
-        sequence_one_hot = None
+        sequence_one_hot = None,
+        structure_one_hot = None
         
     ) -> torch.Tensor:
         if sequence_one_hot is None:
@@ -123,7 +124,11 @@ class EncodeInputs(nn.Module):
         )
 
         # Structure + "structural features" embeds
-        structure_embed = self.structure_tokens_embed(structure_tokens)
+        if structure_one_hot is None:
+            structure_embed = self.structure_tokens_embed(structure_tokens)
+        else:
+            structure_embed = structure_one_hot @ self.structure_tokens_embed.weight            
+
         ss8_embed = self.ss8_embed(ss8_tokens)
         sasa_embed = self.sasa_embed(sasa_tokens)
 
@@ -288,7 +293,8 @@ class ESM3(nn.Module, ESM3InferenceClient):
         structure_coords: torch.Tensor | None = None,
         chain_id: torch.Tensor | None = None,
         sequence_id: torch.Tensor | None = None,
-        sequence_one_hot = None
+        sequence_one_hot = None,
+        structure_one_hot = None
     ) -> ESMOutput:
         """
         Performs forward pass through the ESM3 model. Check utils to see how to tokenize inputs from raw data.
@@ -327,6 +333,7 @@ class ESM3(nn.Module, ESM3InferenceClient):
                     function_tokens,
                     residue_annotation_tokens,
                     sequence_one_hot,
+                    structure_one_hot
                 ]
                 if x is not None
             )
@@ -386,7 +393,8 @@ class ESM3(nn.Module, ESM3InferenceClient):
             sasa_tokens,
             function_tokens,
             residue_annotation_tokens,
-            sequence_one_hot
+            sequence_one_hot,
+            structure_one_hot
         )
         x, embedding = self.transformer(x, sequence_id, affine, affine_mask, chain_id)
         return self.output_heads(x, embedding)
